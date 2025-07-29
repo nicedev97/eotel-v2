@@ -19,10 +19,10 @@ func Middleware(name string) gin.HandlerFunc {
 			WithField("ip", c.ClientIP()).
 			WithField("ua", c.Request.UserAgent())
 
-		ctx = logger.Inject(ctx, logger)
+		ctx = Inject(ctx, logger)
 		c.Request = c.Request.WithContext(ctx)
 
-		defer logger.RecoverPanic(c)
+		defer RecoverPanic(c)
 		c.Next()
 	}
 }

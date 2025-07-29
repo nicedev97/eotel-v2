@@ -13,6 +13,20 @@ type LokiEntry struct {
 	Message string
 }
 
+func SendLokiAsync(level string, msg string, traceID string, spanID string) {
+	if !globalCfg.EnableLoki {
+		return
+	}
+	labels := map[string]string{
+		"level":    level,
+		"trace_id": traceID,
+		"span_id":  spanID,
+		"service":  globalCfg.ServiceName,
+		"job":      globalCfg.JobName,
+	}
+	logChan <- LokiEntry{Labels: labels, Message: msg}
+}
+
 var logChan = make(chan LokiEntry, 100)
 
 func init() {

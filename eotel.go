@@ -54,11 +54,11 @@ func New(ctx context.Context, name string) *Eotel {
 	}
 }
 
-func (l *Eotel) Inject(ctx context.Context, logger *Eotel) context.Context {
+func Inject(ctx context.Context, logger *Eotel) context.Context {
 	return context.WithValue(ctx, loggerCtxKey{}, logger)
 }
 
-func (l *Eotel) FromContext(ctx context.Context, name string) *Eotel {
+func FromContext(ctx context.Context, name string) *Eotel {
 	if val := ctx.Value(loggerCtxKey{}); val != nil {
 		if lg, ok := val.(*Eotel); ok {
 			return lg
@@ -67,18 +67,15 @@ func (l *Eotel) FromContext(ctx context.Context, name string) *Eotel {
 	return New(ctx, name)
 }
 
-func (l *Eotel) FromGin(c *gin.Context, name string) *Eotel {
-	return l.FromContext(c.Request.Context(), name)
+func FromGin(c *gin.Context, name string) *Eotel {
+	return FromContext(c.Request.Context(), name)
 }
 
-func (l *Eotel) RecoverPanic(c *gin.Context) func() {
+func RecoverPanic(c *gin.Context) func() {
 	return func() {
 		if rec := recover(); rec != nil {
 			err := fmt.Errorf("panic: %v", rec)
-			log := l.FromGin(c, "panic")
-			if log == nil {
-				log = l
-			}
+			log := FromGin(c, "panic")
 			log.WithError(err).Error("unhandled panic")
 			c.AbortWithStatus(500)
 		}
@@ -123,7 +120,7 @@ func (l *Eotel) log(level, msg string) {
 		l.logger.Fatal(msg, fields...)
 	}
 
-	if globalCfg.EnableLoki {
+	if globalCfg.EnableLoki && l.exporter != nil {
 		l.exporter.Send(level, msg, traceID, sc.SpanID().String())
 	}
 
@@ -148,7 +145,9 @@ func (l *Eotel) WithError(err error) *Eotel {
 		l.err = err
 		l.fields = append(l.fields, zap.Error(err))
 		l.attrs = append(l.attrs, attribute.String("error", err.Error()))
-		l.exporter.CaptureError(err, map[string]string{}, map[string]any{"error": err.Error()})
+		if l.exporter != nil {
+			l.exporter.CaptureError(err, map[string]string{}, map[string]any{"error": err.Error()})
+		}
 	}
 	return l
 }
