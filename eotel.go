@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/gin-gonic/gin"
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/codes"
 	"os"
 	"sort"
 	"time"
@@ -182,6 +183,7 @@ func (l *Eotel) endSpan(msg, level string) {
 	if l.span != nil {
 		l.span.SetAttributes(l.attrs...)
 		if l.err != nil {
+			l.span.SetStatus(codes.Error, l.err.Error())
 			l.span.RecordError(l.err)
 		}
 		l.span.End()
