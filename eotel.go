@@ -127,6 +127,11 @@ func (l *Eotel) log(level, msg string) {
 	l.endSpan(msg, level)
 }
 
+func (l *Eotel) TraceName(name string) *Eotel {
+	l.name = name
+	return l
+}
+
 func (l *Eotel) WithField(key string, value any) *Eotel {
 	l.fields = append(l.fields, zap.Any(key, value))
 	l.attrs = append(l.attrs, attribute.String(key, fmt.Sprintf("%v", value)))
