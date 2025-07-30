@@ -3,6 +3,8 @@ package eotel
 import (
 	"context"
 	"fmt"
+	"go.opentelemetry.io/otel/metric"
+	"go.opentelemetry.io/otel/trace"
 	"log"
 	"time"
 
@@ -17,6 +19,9 @@ import (
 	"google.golang.org/grpc"
 )
 
+var globalTracer trace.Tracer
+var globalMeter metric.Meter
+
 func InitEOTEL(ctx context.Context, cfg Config) (func(context.Context) error, error) {
 	globalCfg = cfg
 
@@ -27,6 +32,7 @@ func InitEOTEL(ctx context.Context, cfg Config) (func(context.Context) error, er
 		return nil, fmt.Errorf("resource.New: %w", err)
 	}
 
+	// Init tracing
 	if cfg.EnableTracing {
 		tExp, err := otlptracegrpc.New(ctx,
 			otlptracegrpc.WithInsecure(),
@@ -41,8 +47,12 @@ func InitEOTEL(ctx context.Context, cfg Config) (func(context.Context) error, er
 			sdktrace.WithSpanProcessor(sdktrace.NewBatchSpanProcessor(tExp)),
 		)
 		otel.SetTracerProvider(tp)
+		globalTracer = tp.Tracer(cfg.ServiceName)
+	} else {
+		globalTracer = otel.GetTracerProvider().Tracer(cfg.ServiceName)
 	}
 
+	// Init metrics
 	if cfg.EnableMetrics {
 		mExp, err := otlpmetricgrpc.New(ctx,
 			otlpmetricgrpc.WithInsecure(),
@@ -57,8 +67,12 @@ func InitEOTEL(ctx context.Context, cfg Config) (func(context.Context) error, er
 			sdkmetric.WithReader(sdkmetric.NewPeriodicReader(mExp)),
 		)
 		otel.SetMeterProvider(mp)
+		globalMeter = mp.Meter(cfg.ServiceName)
+	} else {
+		globalMeter = otel.GetMeterProvider().Meter(cfg.ServiceName)
 	}
 
+	// Init sentry
 	if cfg.EnableSentry {
 		err := sentry.Init(sentry.ClientOptions{
 			Dsn:              cfg.SentryDSN,
@@ -71,8 +85,11 @@ func InitEOTEL(ctx context.Context, cfg Config) (func(context.Context) error, er
 		}
 	}
 
+	// Graceful shutdown function
 	return func(ctx context.Context) error {
-		sentry.Flush(2 * time.Second)
+		if cfg.EnableSentry {
+			sentry.Flush(2 * time.Second)
+		}
 		return nil
 	}, nil
 }

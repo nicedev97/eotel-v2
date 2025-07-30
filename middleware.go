@@ -22,7 +22,8 @@ func Middleware(name string) gin.HandlerFunc {
 		ctx = Inject(ctx, logger)
 		c.Request = c.Request.WithContext(ctx)
 
-		defer RecoverPanic(c)
+		defer RecoverPanic(c)()
+		
 		c.Next()
 	}
 }
