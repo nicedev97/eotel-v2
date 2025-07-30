@@ -65,7 +65,9 @@ func FromContext(ctx context.Context, name string) *Eotel {
 			return lg
 		}
 	}
-	return New(ctx, name)
+	l := New(ctx, name)
+	l.startSpanIfNeeded()
+	return l
 }
 
 func FromGin(c *gin.Context, name string) *Eotel {
@@ -224,6 +226,9 @@ func (l *Eotel) SetSpanError(err error) {
 }
 
 func (l *Eotel) Child(name string) *Eotel {
+	if l == nil {
+		return New(context.Background(), name)
+	}
 	ctx, span := l.tracer.Start(l.ctx, name)
 	return &Eotel{
 		ctx:      ctx,
@@ -233,6 +238,15 @@ func (l *Eotel) Child(name string) *Eotel {
 		meter:    l.meter,
 		start:    time.Now(),
 		exporter: l.exporter,
+	}
+}
+
+func Noop(name string) *Eotel {
+	return &Eotel{
+		ctx:    context.Background(),
+		logger: zap.NewNop(),
+		name:   name,
+		start:  time.Now(),
 	}
 }
 
