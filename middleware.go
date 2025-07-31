@@ -9,6 +9,8 @@ import (
 
 func Middleware(name string) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		defer RecoverPanic(c)()
+		
 		ctx, span := otel.Tracer(globalCfg.ServiceName).
 			Start(c.Request.Context(), fmt.Sprintf("%s %s", c.Request.Method, c.FullPath()))
 		defer span.End()
@@ -22,8 +24,6 @@ func Middleware(name string) gin.HandlerFunc {
 		ctx = Inject(ctx, logger)
 		c.Request = c.Request.WithContext(ctx)
 
-		defer RecoverPanic(c)()
-		
 		c.Next()
 	}
 }

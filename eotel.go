@@ -78,8 +78,14 @@ func RecoverPanic(c *gin.Context) func() {
 	return func() {
 		if rec := recover(); rec != nil {
 			err := fmt.Errorf("panic: %v", rec)
+
 			log := FromGin(c, "panic")
-			log.WithError(err).Error("unhandled panic")
+			if log == nil || log.logger == nil {
+				fmt.Println("PANIC RECOVERED:", err)
+			} else {
+				log.WithError(err).Error("unhandled panic")
+			}
+
 			c.AbortWithStatus(500)
 		}
 	}
