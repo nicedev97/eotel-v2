@@ -80,7 +80,7 @@ func RecoverPanic(c *gin.Context) func() {
 
 			log := Safe(FromGin(c, "panic")).WithError(err)
 			log.Error("unhandled panic")
-			
+
 			span := trace.SpanFromContext(c.Request.Context())
 			if span != nil {
 				span.RecordError(err)
@@ -218,6 +218,7 @@ func (l *Eotel) endSpan(msg, level string) {
 			l.span.SetStatus(codes.Error, l.err.Error())
 			l.span.RecordError(l.err)
 		}
+		l.span.SetStatus(codes.Error, l.err.Error())
 		l.span.End()
 	}
 
