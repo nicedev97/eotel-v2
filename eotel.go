@@ -6,6 +6,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/codes"
+	"net/http"
 	"os"
 	"sort"
 	"time"
@@ -77,10 +78,18 @@ func RecoverPanic(c *gin.Context) func() {
 		if rec := recover(); rec != nil {
 			err := fmt.Errorf("panic: %v", rec)
 
-			log := FromGin(c, "panic")
-			Safe(log).WithError(err).Error("unhandled panic")
+			log := Safe(FromGin(c, "panic")).WithError(err)
+			log.Error("unhandled panic")
+			
+			span := trace.SpanFromContext(c.Request.Context())
+			if span != nil {
+				span.RecordError(err)
+				span.SetStatus(codes.Error, err.Error())
+			}
 
-			c.AbortWithStatus(500)
+			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{
+				"error": "internal server error",
+			})
 		}
 	}
 }
