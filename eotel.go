@@ -224,10 +224,10 @@ func initMetrics(m metric.Meter) (metric.Int64Counter, metric.Float64Histogram) 
 	return c, h
 }
 
-func (l *Eotel) WithTracer(name string, fn func(ctx context.Context)) {
+func (l *Eotel) WithTracer(name string, fn func(ctx context.Context) error) error {
 	ctx, span := l.tracer.Start(l.ctx, name)
 	defer span.End()
-	fn(ctx)
+	return fn(ctx)
 }
 
 func (l *Eotel) SpanEvent(name string, attrs ...attribute.KeyValue) {
