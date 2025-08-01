@@ -218,7 +218,6 @@ func (l *Eotel) endSpan(msg, level string) {
 			l.span.SetStatus(codes.Error, l.err.Error())
 			l.span.RecordError(l.err)
 		}
-		l.span.SetStatus(codes.Error, l.err.Error())
 		l.span.End()
 	}
 
@@ -262,21 +261,24 @@ func (l *Eotel) Child(name string) *Eotel {
 	if l == nil {
 		return Noop(name)
 	}
-	ctx := context.Background()
-	tracer := otel.Tracer(globalCfg.ServiceName)
-	if l.tracer != nil {
-		tracer = l.tracer
-		ctx = l.ctx
+	ctx := l.ctx
+	tracer := l.tracer
+	if tracer == nil {
+		tracer = otel.Tracer(globalCfg.ServiceName)
 	}
 	ctx, span := tracer.Start(ctx, name)
+
 	return &Eotel{
-		ctx:      ctx,
-		span:     span,
-		logger:   zap.NewNop(),
-		tracer:   tracer,
-		meter:    l.meter,
-		start:    time.Now(),
-		exporter: l.exporter,
+		ctx:          ctx,
+		span:         span,
+		logger:       l.logger,
+		tracer:       tracer,
+		meter:        l.meter,
+		logCounter:   l.logCounter,
+		durationHist: l.durationHist,
+		exporter:     l.exporter,
+		name:         name,
+		start:        time.Now(),
 	}
 }
 

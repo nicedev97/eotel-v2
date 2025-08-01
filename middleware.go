@@ -16,6 +16,7 @@ func Middleware(name string) gin.HandlerFunc {
 		defer span.End()
 
 		logger := Safe(New(ctx, name)).
+			TraceName(name).
 			WithField("method", c.Request.Method).
 			WithField("path", c.Request.URL.Path).
 			WithField("ip", c.ClientIP()).
@@ -25,5 +26,7 @@ func Middleware(name string) gin.HandlerFunc {
 		c.Request = c.Request.WithContext(ctx)
 
 		c.Next()
+
+		logger.Info("request completed")
 	}
 }
