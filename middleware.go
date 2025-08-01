@@ -10,12 +10,12 @@ import (
 func Middleware(name string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		defer RecoverPanic(c)()
-		
+
 		ctx, span := otel.Tracer(globalCfg.ServiceName).
 			Start(c.Request.Context(), fmt.Sprintf("%s %s", c.Request.Method, c.FullPath()))
 		defer span.End()
 
-		logger := New(ctx, name).
+		logger := Safe(New(ctx, name)).
 			WithField("method", c.Request.Method).
 			WithField("path", c.Request.URL.Path).
 			WithField("ip", c.ClientIP()).

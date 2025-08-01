@@ -61,13 +61,11 @@ func Inject(ctx context.Context, logger *Eotel) context.Context {
 
 func FromContext(ctx context.Context, name string) *Eotel {
 	if val := ctx.Value(loggerCtxKey{}); val != nil {
-		if lg, ok := val.(*Eotel); ok {
+		if lg, ok := val.(*Eotel); ok && lg != nil {
 			return lg
 		}
 	}
-	l := New(ctx, name)
-	l.startSpanIfNeeded()
-	return l
+	return Noop(name) // fallback safe
 }
 
 func FromGin(c *gin.Context, name string) *Eotel {
@@ -80,15 +78,18 @@ func RecoverPanic(c *gin.Context) func() {
 			err := fmt.Errorf("panic: %v", rec)
 
 			log := FromGin(c, "panic")
-			if log == nil || log.logger == nil {
-				fmt.Println("PANIC RECOVERED:", err)
-			} else {
-				log.WithError(err).Error("unhandled panic")
-			}
+			Safe(log).WithError(err).Error("unhandled panic")
 
 			c.AbortWithStatus(500)
 		}
 	}
+}
+
+func Safe(l *Eotel) *Eotel {
+	if l == nil {
+		return Noop("safe")
+	}
+	return l
 }
 
 func (l *Eotel) Info(msg string)  { l.log("info", msg) }
@@ -104,10 +105,18 @@ func (l *Eotel) Fatal(msg string) {
 }
 
 func (l *Eotel) log(level, msg string) {
+	if l == nil {
+		fmt.Printf("[%s] %s\n", level, msg)
+		return
+	}
 	l.startSpanIfNeeded()
-	sc := l.span.SpanContext()
-	traceID := sc.TraceID().String()
 
+	sc := trace.SpanContext{}
+	if l.span != nil {
+		sc = l.span.SpanContext()
+	}
+
+	traceID := sc.TraceID().String()
 	fields := append([]zap.Field{
 		zap.String("trace_id", traceID),
 		zap.String("span_id", sc.SpanID().String()),
@@ -116,17 +125,19 @@ func (l *Eotel) log(level, msg string) {
 		zap.String("level", level),
 	}, l.fields...)
 
-	switch level {
-	case "info":
-		l.logger.Info(msg, fields...)
-	case "error":
-		l.logger.Error(msg, fields...)
-	case "debug":
-		l.logger.Debug(msg, fields...)
-	case "warn":
-		l.logger.Warn(msg, fields...)
-	case "fatal":
-		l.logger.Fatal(msg, fields...)
+	if l.logger != nil {
+		switch level {
+		case "info":
+			l.logger.Info(msg, fields...)
+		case "error":
+			l.logger.Error(msg, fields...)
+		case "debug":
+			l.logger.Debug(msg, fields...)
+		case "warn":
+			l.logger.Warn(msg, fields...)
+		case "fatal":
+			l.logger.Fatal(msg, fields...)
+		}
 	}
 
 	if globalCfg.EnableLoki && l.exporter != nil {
@@ -177,7 +188,11 @@ func (l *Eotel) startSpanIfNeeded() {
 }
 
 func (l *Eotel) endSpan(msg, level string) {
+	if l == nil {
+		return
+	}
 	durationMs := time.Since(l.start).Seconds() * 1000
+
 	l.attrs = append(l.attrs,
 		attribute.String("log.message", msg),
 		attribute.String("log.level", level),
@@ -197,8 +212,10 @@ func (l *Eotel) endSpan(msg, level string) {
 		l.span.End()
 	}
 
-	l.logCounter.Add(l.ctx, 1, metric.WithAttributes(attribute.String("level", level)))
-	l.durationHist.Record(l.ctx, durationMs, metric.WithAttributes(attribute.String("level", level)))
+	if l.meter != nil {
+		l.logCounter.Add(l.ctx, 1, metric.WithAttributes(attribute.String("level", level)))
+		l.durationHist.Record(l.ctx, durationMs, metric.WithAttributes(attribute.String("level", level)))
+	}
 }
 
 func initMetrics(m metric.Meter) (metric.Int64Counter, metric.Float64Histogram) {
@@ -233,14 +250,20 @@ func (l *Eotel) SetSpanError(err error) {
 
 func (l *Eotel) Child(name string) *Eotel {
 	if l == nil {
-		return New(context.Background(), name)
+		return Noop(name)
 	}
-	ctx, span := l.tracer.Start(l.ctx, name)
+	ctx := context.Background()
+	tracer := otel.Tracer(globalCfg.ServiceName)
+	if l.tracer != nil {
+		tracer = l.tracer
+		ctx = l.ctx
+	}
+	ctx, span := tracer.Start(ctx, name)
 	return &Eotel{
 		ctx:      ctx,
 		span:     span,
-		logger:   l.logger,
-		tracer:   l.tracer,
+		logger:   zap.NewNop(),
+		tracer:   tracer,
 		meter:    l.meter,
 		start:    time.Now(),
 		exporter: l.exporter,
