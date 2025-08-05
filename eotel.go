@@ -162,6 +162,12 @@ func (l *Eotel) TraceName(name string) *Eotel {
 }
 
 func (l *Eotel) WithField(key string, value any) *Eotel {
+	if l == nil {
+		return Noop("WithField")
+	}
+	if key == "" {
+		return l
+	}
 	l.fields = append(l.fields, zap.Any(key, value))
 	l.attrs = append(l.attrs, attribute.String(key, fmt.Sprintf("%v", value)))
 	return l
@@ -194,6 +200,13 @@ func (l *Eotel) startSpanIfNeeded() {
 	if l.span == nil {
 		l.ctx, l.span = l.tracer.Start(l.ctx, l.name)
 	}
+}
+
+func (l *Eotel) Span() trace.Span {
+	if l == nil {
+		return nil
+	}
+	return l.span
 }
 
 func (l *Eotel) endSpan(msg, level string) {
